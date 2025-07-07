@@ -1,0 +1,54 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver
+    environment:
+      SA_PASSWORD: "Dicri2025$User"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "14333:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+      - ./init-db.sql:/init-db.sql
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/1433"]
+      interval: 10s
+      retries: 30
+      start_period: 60s
+      timeout: 5s
+
+  db-init:
+    image: mcr.microsoft.com/mssql-tools
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: >
+      bash -c "/opt/mssql-tools/bin/sqlcmd -S db -U sa -P 'Dicri2025$User' -i /init-db.sql"
+    volumes:
+      - ./init-db.sql:/init-db.sql
+
+  backend:
+    build: ./Backend
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_USER=sa
+      - DB_PASSWORD=Dicri2025$User
+      - DB_SERVER=db
+      - DB_PORT=1433
+      - DB_DATABASE=DICRI_DB
+    depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+
+  frontend:
+    build: ./Frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  sql_data:
